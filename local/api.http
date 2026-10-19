@@ -1,0 +1,59 @@
+### kafka-lab — run with the IntelliJ HTTP Client (▶ in the gutter). Select the "local" env first.
+# The broker and the app both need to be up:
+#   docker compose -f local/docker-compose.yml up -d
+#   ./gradlew bootRun
+#
+# Keep the app's log visible. Every consumed record logs its partition and offset, and that is
+# where the lesson is — not in these responses.
+
+### health — "kafka" appears here because spring-kafka contributes a health indicator
+GET {{management}}/actuator/health
+
+############################################################
+# 1 — produce one record, see where it landed
+############################################################
+
+### the response is the partition and offset the broker assigned
+POST {{host}}/api/orders?orderId=order-1&status=PLACED&amountMinor=4999
+
+### a different key — likely a different partition (hash(key) % 3)
+POST {{host}}/api/orders?orderId=order-2&status=PLACED&amountMinor=1500
+
+### same key again: same partition as order-1, offset one higher
+POST {{host}}/api/orders?orderId=order-1&status=PAID
+
+############################################################
+# 2 — per-key ordering
+############################################################
+
+### three statuses for one order. Note every ack has the same partition, and ascending offsets.
+POST {{host}}/api/orders/lifecycle?orderId=order-3
+
+### what the fulfilment group consumed, plus the analytics group's count.
+### Both groups saw every record — one topic, two independent cursors.
+GET {{host}}/api/orders/handled
+
+###
+DELETE {{host}}/api/orders/handled
+
+############################################################
+# 3 — now do it from the broker side
+############################################################
+# Everything above is also visible in kafka-ui at http://localhost:8090. The CLI is worth learning
+# anyway; these run inside the container:
+#
+#   docker exec -it kafka-lab-kafka-1 /opt/kafka/bin/kafka-topics.sh \
+#     --bootstrap-server localhost:9092 --describe --topic orders
+#
+#   docker exec -it kafka-lab-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh \
+#     --bootstrap-server localhost:9092 --topic orders --from-beginning \
+#     --property print.key=true --property print.partition=true
+#
+#   # lag per partition for a group — the number you alert on in production
+#   docker exec -it kafka-lab-kafka-1 /opt/kafka/bin/kafka-consumer-groups.sh \
+#     --bootstrap-server localhost:9092 --describe --group fulfilment
+#
+#   # rewind a group to the start of the topic (stop the app first — a live member blocks this)
+#   docker exec -it kafka-lab-kafka-1 /opt/kafka/bin/kafka-consumer-groups.sh \
+#     --bootstrap-server localhost:9092 --group fulfilment --topic orders \
+#     --reset-offsets --to-earliest --execute

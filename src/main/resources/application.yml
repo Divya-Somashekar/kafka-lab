@@ -1,0 +1,53 @@
+spring:
+  application.name: kafka-lab
+  kafka:
+    # The host listener from local/docker-compose.yml. Inside the compose network the broker is
+    # kafka:19092 instead — a broker advertises a hostname, and a client always reconnects to the
+    # advertised one, which is why the image declares two listeners.
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # acks=all: the leader waits for every in-sync replica. With one broker that is still one
+      # copy, so "durable" here means "on one disk" — the setting is about what happens when you
+      # scale out, not about this laptop.
+      acks: all
+      # Retries are safe to turn up only with idempotence on. Without it a retried batch can be
+      # appended twice, or appended out of order after a transient failure.
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        linger.ms: 5
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # The container commits for us, after the listener returns. Auto-commit would commit on a
+      # timer regardless of whether the handler succeeded, which loses records on a crash.
+      enable-auto-commit: false
+      # Only applies the first time a group has no committed offset. 'earliest' means a fresh group
+      # replays the whole topic — try 'latest' and watch a new group see nothing.
+      auto-offset-reset: earliest
+      properties:
+        # Small on purpose: the smaller the poll, the more visible the batching in the logs.
+        max.poll.records: 10
+    listener:
+      ack-mode: record
+
+server:
+  port: 8085
+
+kafkalab:
+  orders-topic: orders
+  # Three partitions and one consumer per group means one consumer holds all three. Start a second
+  # app instance and watch the group rebalance — the partitions split, and a third instance idles.
+  partitions: 3
+  replicas: 1
+
+management:
+  endpoints.web.exposure.include: health,info,prometheus
+  endpoint.health.show-details: always
+
+logging.level:
+  com.example.kafkalab: DEBUG
+  # Uncomment to watch rebalances, offset commits and heartbeats. Noisy, and worth it once.
+  # org.apache.kafka.clients.consumer: DEBUG
