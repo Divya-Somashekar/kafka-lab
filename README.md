@@ -3,6 +3,10 @@
 A deliberately small Kafka skeleton to get hands on: one topic, one producer, two consumer groups,
 a real broker in Docker, and an integration test that runs against a throwaway one.
 
+> The companion write-up is **[Kafka, to interview depth](https://ashtegottaytha.com/learn/kafka/)** —
+> partitions and ordering, consumer groups, `acks` and ISR, delivery semantics, and the follow-up
+> questions this lab is built to answer.
+
 Kotlin 2.3 · Spring Boot 4.1 · Java 25 · Apache Kafka 4.1 (KRaft) · Testcontainers · Gradle 9.8 (wrapper included)
 
 Everything here is working code — the *learning* is in the [exercises](#exercises), which are
